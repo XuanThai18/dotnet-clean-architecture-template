@@ -1,0 +1,9 @@
+@YourApp.Api_HostAddress = http://localhost:5068
+
+GET {{YourApp.Api_HostAddress}}/health/live
+
+###
+
+GET {{YourApp.Api_HostAddress}}/health/ready
+
+###

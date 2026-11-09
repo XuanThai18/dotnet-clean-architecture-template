@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/YourApp.Api/YourApp.Api.csproj" />
+    <Project Path="src/YourApp.Application/YourApp.Application.csproj" />
+    <Project Path="src/YourApp.Domain/YourApp.Domain.csproj" />
+    <Project Path="src/YourApp.Infrastructure/YourApp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/YourApp.ArchitectureTests/YourApp.ArchitectureTests.csproj" />
+    <Project Path="tests/YourApp.IntegrationTests/YourApp.IntegrationTests.csproj" />
+    <Project Path="tests/YourApp.UnitTests/YourApp.UnitTests.csproj" />
+  </Folder>
+</Solution>

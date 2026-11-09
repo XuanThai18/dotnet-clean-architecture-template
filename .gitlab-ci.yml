@@ -1,0 +1,61 @@
+# GitLab CI tương đương .github/workflows/ci.yml — giữ file của nền tảng bạn dùng, xoá file còn lại.
+stages:
+  - build
+  - test
+  - package
+
+variables:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  NUGET_PACKAGES: "$CI_PROJECT_DIR/.nuget/packages"
+
+default:
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  cache:
+    key:
+      files: [Directory.Packages.props]
+    paths: [.nuget/packages]
+
+build:
+  stage: build
+  script:
+    - dotnet restore YourApp.slnx
+    - dotnet build YourApp.slnx -c Release --no-restore
+    - dotnet list YourApp.slnx package --vulnerable --include-transitive | tee vuln.txt
+    - if grep -qE "Critical|High" vuln.txt; then echo "High/Critical vulnerable packages found"; exit 1; fi
+
+# Testcontainers cần Docker: dùng dịch vụ docker:dind (runner phải bật privileged).
+test:
+  stage: test
+  services:
+    - name: docker:27-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_HOST_OVERRIDE: "docker"
+  script:
+    - dotnet test --solution YourApp.slnx -c Release --report-xunit-trx --results-directory TestResults
+  artifacts:
+    when: always
+    paths: [TestResults]
+    expire_in: 7 days
+
+docker-image:
+  stage: package
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    # Đẩy lên registry (GitLab/Harbor): bỏ comment và cấu hình biến CI_REGISTRY_* tương ứng.
+    # - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop"

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\YourApp.Application\YourApp.Application.csproj" />
+    <ProjectReference Include="..\..\src\YourApp.Domain\YourApp.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

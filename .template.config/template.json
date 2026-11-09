@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Nguyen Xuan Thai",
+  "classifications": [ "Web", "WebAPI", "Clean Architecture", "CQRS" ],
+  "name": ".NET 10 Clean Architecture API",
+  "identity": "Thai.CleanArchitecture.Api",
+  "shortName": "ca-api",
+  "description": "ASP.NET Core 10 Web API: Clean Architecture, MediatR, EF Core + Dapper (PostgreSQL), Redis, JWT, OpenTelemetry, Testcontainers.",
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "sourceName": "YourApp",
+  "preferNameDirectory": true,
+  "forms": {
+    "separatorToUnderscore": {
+      "identifier": "replace",
+      "pattern": "[.\\-\\s]",
+      "replacement": "_"
+    },
+    "lowerSnake": {
+      "identifier": "chain",
+      "steps": [ "lowerCase", "separatorToUnderscore" ]
+    }
+  },
+  "symbols": {
+    "LowerSnakeName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerSnake",
+      "replaces": "yourapp",
+      "description": "Tên chữ thường an toàn cho DB/container/image: Acme.Shop → acme_shop."
+    },
+    "IncludeSample": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "true",
+      "description": "Kèm feature mẫu Products (entity, CQRS, controller, migration và test)."
+    },
+    "SkipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Không chạy dotnet restore sau khi tạo project."
+    },
+    "HttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 5000, "high": 5999 },
+      "replaces": "5068"
+    },
+    "HttpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 7000, "high": 7999 },
+      "replaces": "7032"
+    }
+  },
+  "sources": [
+    {
+      "exclude": [
+        "**/[Bb]in/**",
+        "**/[Oo]bj/**",
+        ".template.config/**/*",
+        "**/.vs/**",
+        "**/.git/**",
+        "**/*.user",
+        "**/.env",
+        "**/TestResults/**"
+      ],
+      "modifiers": [
+        {
+          "condition": "(!IncludeSample)",
+          "exclude": [
+            "src/YourApp.Domain/Products/**",
+            "src/YourApp.Application/Products/**",
+            "src/YourApp.Infrastructure/Persistence/Configurations/ProductConfiguration.cs",
+            "src/YourApp.Infrastructure/Persistence/Repositories/ProductRepository.cs",
+            "src/YourApp.Infrastructure/Persistence/Migrations/**",
+            "src/YourApp.Api/Controllers/ProductsController.cs",
+            "src/YourApp.Api/Contracts/Products/**",
+            "tests/YourApp.UnitTests/Domain/ProductTests.cs",
+            "tests/YourApp.UnitTests/Application/**",
+            "tests/YourApp.IntegrationTests/ProductsEndpointsTests.cs",
+            "tests/YourApp.IntegrationTests/UnitOfWorkTransactionTests.cs"
+          ]
+        }
+      ]
+    }
+  ],
+  "postActions": [
+    {
+      "condition": "(!SkipRestore)",
+      "description": "Restore NuGet packages and local tools.",
+      "manualInstructions": [ { "text": "Run 'dotnet restore' and 'dotnet tool restore'" } ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    }
+  ]
+}

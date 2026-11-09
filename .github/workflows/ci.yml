@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/Directory.Packages.props'
+
+      - name: Restore
+        run: dotnet restore YourApp.slnx
+
+      - name: Build
+        run: dotnet build YourApp.slnx -c Release --no-restore
+
+      - name: Vulnerable packages
+        run: |
+          dotnet list YourApp.slnx package --vulnerable --include-transitive | tee vuln.txt
+          if grep -qE "Critical|High" vuln.txt; then echo "::error::High/Critical vulnerable packages found"; exit 1; fi
+
+      # Integration test dùng Testcontainers: runner ubuntu có sẵn Docker.
+      - name: Test
+        run: dotnet test --solution YourApp.slnx -c Release --no-build --report-xunit-trx --results-directory ${{ github.workspace }}/TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+  docker:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t yourapp-api:${{ github.sha }} .

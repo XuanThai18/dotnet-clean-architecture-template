@@ -181,8 +181,26 @@ dotnet ef migrations script --idempotent --context ApplicationDbContext -p src/Y
 dotnet ef migrations bundle --context ApplicationDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o efbundle
 ```
 
-- Development: `Database:MigrateOnStartup=true` tự migrate khi chạy.
-- Production: **không** migrate lúc khởi động (nhiều pod cùng chạy sẽ tranh nhau). Chạy `efbundle` hoặc `migrate.sql` thành một bước riêng trong CI/CD trước khi deploy.
+**Development:** `Database:MigrateOnStartup=true` — app tự chạy migration lúc khởi động, kéo code mới về là DB đúng cấu trúc.
+
+**Production:** `MigrateOnStartup=false`; migration là **một bước riêng trong CI/CD, chạy một lần, trước khi deploy bản app mới** (job `migrate` có sẵn, xem mục CI). Lý do:
+
+1. **Quyền DB tối thiểu** — tự migrate thì tài khoản DB của app phải có quyền `CREATE/ALTER/DROP`; app bị khai thác (vd SQL injection) là lộ luôn quyền đó. Tách ra: app chỉ cần đọc/ghi dữ liệu, quyền sửa cấu trúc chỉ cấp cho bước migration.
+2. **Migration lâu làm pod bị giết** — thêm index cho bảng lớn có thể mất vài phút; app chưa trả lời health check nên k8s khởi động lại pod, migration bị cắt ngang và deploy lặp mãi.
+3. **Kiểm soát lỗi** — bước riêng thì lỗi là dừng deploy (bản cũ vẫn chạy), log rõ ràng, DBA duyệt được SQL trước; lẫn vào lúc khởi động thì khó biết DB đang dở ở đâu.
+
+(EF Core 9+ đã khoá DB khi migrate nên nhiều pod không còn chạy chồng lên nhau — đó không còn là lý do.)
+
+Hai cách đóng gói migration để chạy ở bước đó:
+
+| | `efbundle` (job CI dùng cách này) | `migrate.sql` |
+|---|---|---|
+| Sinh bằng | `dotnet ef migrations bundle` | `dotnet ef migrations script --idempotent` |
+| Là gì | File chạy được chứa sẵn mọi migration | File SQL thuần, đọc/sửa được |
+| Chạy | `./efbundle --connection "<chuỗi kết nối>"` | `psql -f migrate.sql` |
+| Hợp với | CI/CD tự động hoàn toàn | Có DBA duyệt SQL trước khi chạy |
+
+Cả hai đều chỉ chạy migration còn thiếu (theo bảng `__EFMigrationsHistory`), chạy lại không sao. Có `AuthDbContext` thì phải đóng gói và chạy **cho cả hai context**.
 
 ## Cấu hình
 
@@ -217,4 +235,14 @@ dotnet test --solution YourApp.slnx --filter-class "*ProductsEndpointsTests"
 
 ## CI
 
-Có sẵn `.github/workflows/ci.yml` và `.gitlab-ci.yml` (restore → build → quét gói lỗ hổng → test → build image). Giữ file của nền tảng bạn dùng, xoá file còn lại. GitLab cần runner bật `privileged` cho Docker-in-Docker (Testcontainers).
+Có sẵn `.github/workflows/ci.yml` và `.gitlab-ci.yml`: restore → build → quét gói lỗ hổng → test → build image → **migrate**. Giữ file của nền tảng bạn dùng, xoá file còn lại. GitLab cần runner bật `privileged` cho Docker-in-Docker (Testcontainers).
+
+**Job `migrate`** (chỉ chạy trên `main`, sau khi build image thành công): đóng gói migration thành `efbundle` cho từng DbContext rồi chạy lên DB production. Mặc định **tắt** để dự án chưa có DB production không bị CI đỏ. Bật:
+
+| | GitHub Actions | GitLab CI |
+|---|---|---|
+| Công tắc | Variable `RUN_DB_MIGRATIONS = true` | Variable `RUN_DB_MIGRATIONS = true` |
+| Chuỗi kết nối | Secret `PRODUCTION_DB_CONNECTION` trong environment `production` | Variable `PRODUCTION_DB_CONNECTION` (Masked + Protected) |
+| Duyệt tay trước khi chạy | Environment `production` → Required reviewers | Có sẵn (`when: manual`) |
+
+Dùng tài khoản DB riêng có quyền sửa cấu trúc bảng cho job này; app chạy bằng tài khoản chỉ đọc/ghi dữ liệu. Job deploy (đẩy image, cập nhật manifest k8s) đặt **sau** `migrate` — khung mẫu có sẵn dạng comment trong cả hai file.

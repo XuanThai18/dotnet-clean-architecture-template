@@ -54,3 +54,50 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t yourapp-api:${{ github.sha }} .
+
+  # Chạy migration lên DB production MỘT lần, TRƯỚC khi deploy bản app mới.
+  # Bật bằng: Settings → Secrets and variables → Actions
+  #   - Variables: RUN_DB_MIGRATIONS = true
+  #   - Environments → "production" → Secrets: PRODUCTION_DB_CONNECTION
+  #     (tài khoản có quyền sửa cấu trúc bảng; app chạy bằng tài khoản khác chỉ đọc/ghi dữ liệu)
+  #   - Environments → "production" → Required reviewers: có bước duyệt tay trước khi đụng DB thật.
+  migrate:
+    needs: [build-test, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RUN_DB_MIGRATIONS == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build migration bundles
+        run: |
+          dotnet tool restore
+          dotnet ef migrations bundle --context ApplicationDbContext \
+            -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure \
+            --self-contained -r linux-x64 --force -o efbundle-app
+          #if (AuthLocal)
+          dotnet ef migrations bundle --context AuthDbContext \
+            -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure \
+            --self-contained -r linux-x64 --force -o efbundle-auth
+          #endif
+
+      - name: Apply migrations
+        env:
+          DB_CONNECTION: ${{ secrets.PRODUCTION_DB_CONNECTION }}
+        run: |
+          if [ -z "$DB_CONNECTION" ]; then echo "::error::Secret PRODUCTION_DB_CONNECTION is not set"; exit 1; fi
+          ./efbundle-app --connection "$DB_CONNECTION"
+          #if (AuthLocal)
+          ./efbundle-auth --connection "$DB_CONNECTION"
+          #endif
+
+  # deploy:
+  #   needs: migrate          # chỉ deploy khi migration đã chạy xong
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   steps:
+  #     - ... đẩy image lên registry, cập nhật manifest k8s / ArgoCD ...

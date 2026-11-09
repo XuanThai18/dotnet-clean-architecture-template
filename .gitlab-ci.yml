@@ -3,6 +3,8 @@ stages:
   - build
   - test
   - package
+  - migrate
+  # - deploy   # thêm job deploy ở stage này: chỉ chạy sau khi migrate xong
 
 variables:
   DOTNET_NOLOGO: "true"
@@ -59,3 +61,25 @@ docker-image:
     # - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop"
+
+# Chạy migration lên DB production MỘT lần, TRƯỚC khi deploy bản app mới; bấm tay để chạy.
+# Bật bằng: Settings → CI/CD → Variables
+#   - RUN_DB_MIGRATIONS = true
+#   - PRODUCTION_DB_CONNECTION (Masked + Protected): tài khoản có quyền sửa cấu trúc bảng;
+#     app chạy bằng tài khoản khác chỉ đọc/ghi dữ liệu.
+migrate:
+  stage: migrate
+  environment: production
+  script:
+    - test -n "$PRODUCTION_DB_CONNECTION" || { echo "Variable PRODUCTION_DB_CONNECTION is not set"; exit 1; }
+    - dotnet tool restore
+    - dotnet ef migrations bundle --context ApplicationDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure --self-contained -r linux-x64 --force -o efbundle-app
+    - ./efbundle-app --connection "$PRODUCTION_DB_CONNECTION"
+    #if (AuthLocal)
+    - dotnet ef migrations bundle --context AuthDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure --self-contained -r linux-x64 --force -o efbundle-auth
+    - ./efbundle-auth --connection "$PRODUCTION_DB_CONNECTION"
+    #endif
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $RUN_DB_MIGRATIONS == "true"
+      when: manual
+      allow_failure: false   # pipeline dừng chờ bấm, không tự bỏ qua bước migration

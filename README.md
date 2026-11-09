@@ -78,7 +78,7 @@ Bảng nằm trong schema `auth`, `AuthDbContext` và migration riêng (`src/You
 - **Mobile / hệ thống khác:** gửi header `X-Client-Type: mobile` khi login → refresh token trả trong body; refresh bằng body `{ "refreshToken": "..." }`. Muốn mọi client đều dùng body: `Auth:RefreshToken:DefaultTransport = Body`.
 - FE khác origin dùng cookie: `Cors:AllowCredentials = true` và liệt kê `Cors:AllowedOrigins`. FE khác **site** (khác domain gốc) thì `Auth:RefreshToken:SameSite = None`.
 
-**Bảo vệ đi kèm:** khoá 15' sau 5 lần sai mật khẩu; cùng một thông báo lỗi cho sai email và sai mật khẩu (kèm băm giả để thời gian phản hồi như nhau); rate limit riêng 10 request/phút/IP cho login, refresh, register (`RateLimiting:SensitivePermitLimit`); refresh token dùng lại sau khi đã đổi → **thu hồi cả họ phiên** (trừ 10 giây ân hạn cho hai tab refresh cùng lúc); concurrency token `xmin` chặn hai request cùng đổi một phiên.
+**Bảo vệ đi kèm:** khoá 15' sau 5 lần sai mật khẩu; cùng một thông báo lỗi cho sai email và sai mật khẩu (kèm băm giả để thời gian phản hồi như nhau); rate limit riêng 100 request/phút/IP cho login, refresh, register (`RateLimiting:SensitivePermitLimit`; để rộng vì cả văn phòng thường chung một IP qua NAT — chống dò mật khẩu một tài khoản là việc của cơ chế khoá tài khoản); refresh token dùng lại sau khi đã đổi → **thu hồi cả họ phiên** (trừ 10 giây ân hạn cho hai tab refresh cùng lúc); concurrency token `xmin` chặn hai request cùng đổi một phiên.
 
 **Giới hạn đã biết:** access token không kiểm DB ở mỗi request (stateless) nên đăng xuất / đổi mật khẩu chỉ chặn được access token đã phát khi nó hết hạn (tối đa `Auth:AccessTokenMinutes`). Cần chặn tức thì thì thêm kiểm `sid` với danh sách phiên bị thu hồi trong Redis ở `OnTokenValidated` của JwtBearer.
 

@@ -32,7 +32,7 @@ public sealed class ListProductsQueryHandler(IReadDbContext db)
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            // Contains → strpos(...) > 0 trên Postgres: tìm đúng chuỗi người dùng gõ, "%"/"_" không thành wildcard.
+            // Contains → LIKE @p trên Postgres; EF tự escape "%"/"_" trong giá trị tham số nên không thành wildcard.
 #pragma warning disable CA1304, CA1311, CA1862 // ToLower trong expression được dịch sang lower() của SQL, không chạy culture .NET
             var term = request.Search.Trim().ToLower();
             query = query.Where(p => p.Name.ToLower().Contains(term) || p.Sku.ToLower().Contains(term));

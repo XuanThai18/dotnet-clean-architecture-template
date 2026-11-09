@@ -4,9 +4,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+#if (AuthLocal)
 using YourApp.Api.Options;
+#endif
 using YourApp.Api.Services;
 using YourApp.Application.Abstractions;
+using YourApp.Domain.Common;
+using YourApp.Infrastructure.Security;
 
 namespace YourApp.Api.Extensions;
 
@@ -45,19 +49,22 @@ public static class AuthSetup
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
                     ClockSkew = TimeSpan.FromSeconds(jwt.ClockSkewSeconds),
                     NameClaimType = JwtRegisteredClaimNames.Sub,
-                    RoleClaimType = "role"
+                    RoleClaimType = JwtTokenIssuer.RoleClaim
                 };
             });
 
         services.AddAuthorizationBuilder()
             // Secure-by-default: endpoint không gắn attribute vẫn phải đăng nhập; mở bằng [AllowAnonymous].
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
-            .AddPolicy(Policies.RequireAdminRole, policy => policy.RequireRole("Admin"))
-            .AddPolicy(Policies.RequireManagerRole, policy => policy.RequireRole("Admin", "Manager"));
+            .AddPolicy(Policies.RequireAdminRole, policy => policy.RequireRole(Roles.Admin))
+            .AddPolicy(Policies.RequireManagerRole, policy => policy.RequireRole(Roles.Admin, Roles.Manager));
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddSingleton<JwtTokenIssuer>();
+#if (AuthLocal)
+        services.AddOptions<RefreshTokenCookieOptions>().BindConfiguration(RefreshTokenCookieOptions.SectionName);
+#endif
 
         return services;
     }

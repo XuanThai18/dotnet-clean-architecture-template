@@ -24,4 +24,13 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
+  <!--#if (false) -->
+  <!-- CHỈ dành cho source của template: bật các khối "#if (AuthLocal)" để build/test đủ mọi module.
+       Project sinh ra không cần (engine đã giữ hoặc gỡ sẵn các khối đó) nên khối này luôn bị xoá khi tạo project.
+       Lưu ý: XML comment không được chứa hai dấu gạch liền nhau. -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);AuthLocal</DefineConstants>
+  </PropertyGroup>
+  <!--#endif -->
+
 </Project>

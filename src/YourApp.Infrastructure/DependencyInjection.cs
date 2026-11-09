@@ -3,6 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using YourApp.Application.Abstractions;
+#if (AuthLocal)
+using YourApp.Infrastructure.Auth;
+#endif
 using YourApp.Infrastructure.Persistence;
 using YourApp.Infrastructure.Persistence.Contexts;
 using YourApp.Infrastructure.Persistence.Interceptors;
@@ -38,11 +41,14 @@ public static class DependencyInjection
                 sp.GetRequiredService<AuditableEntityInterceptor>(),
                 sp.GetRequiredService<SoftDeleteInterceptor>()));
 
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IUnitOfWork, UnitOfWork<ApplicationDbContext>>();
         services.AddScoped<IReadDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
         DapperConfiguration.Configure();
         services.AddRepositories();
+#if (AuthLocal)
+        services.AddAuthModule();
+#endif
 
         services.AddStackExchangeRedisCache(options =>
         {

@@ -12,6 +12,9 @@
     <!-- Query handler viết LINQ (ToListAsync, AsNoTracking...). Không tham chiếu provider Npgsql: SQL riêng của Postgres đi qua Dapper. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!--#if (AuthLocal) -->
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <!--#endif -->
   </ItemGroup>
 
 </Project>

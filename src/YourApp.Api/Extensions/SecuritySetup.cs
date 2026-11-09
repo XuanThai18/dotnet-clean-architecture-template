@@ -9,6 +9,7 @@ namespace YourApp.Api.Extensions;
 public static class SecuritySetup
 {
     public const string CorsPolicy = "Default";
+    public const string SensitivePolicy = "sensitive";
 
     public static IServiceCollection AddSecurity(this IServiceCollection services, IConfiguration configuration)
     {
@@ -28,8 +29,13 @@ public static class SecuritySetup
         var cors = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
         services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
         {
-            if (cors.AllowedOrigins.Length > 0)
-                policy.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            if (cors.AllowedOrigins.Length == 0)
+                return;
+
+            policy.WithOrigins(cors.AllowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            // Cần khi FE khác origin mà dùng cookie (refresh token HttpOnly); AllowedOrigins phải liệt kê cụ thể.
+            if (cors.AllowCredentials)
+                policy.AllowCredentials();
         }));
 
         services.AddOptions<RateLimitingOptions>()
@@ -49,6 +55,17 @@ public static class SecuritySetup
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = rateLimit.PermitLimit,
+                        Window = TimeSpan.FromSeconds(rateLimit.WindowSeconds),
+                        QueueLimit = 0
+                    }));
+
+            // Chặt hơn cho endpoint nhạy cảm (đăng nhập, refresh): chống dò mật khẩu theo IP.
+            options.AddPolicy(SensitivePolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "sensitive-ip:" + context.Connection.RemoteIpAddress,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = rateLimit.SensitivePermitLimit,
                         Window = TimeSpan.FromSeconds(rateLimit.WindowSeconds),
                         QueueLimit = 0
                     }));

@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+#if (AuthLocal)
+using YourApp.Infrastructure.Auth;
+#endif
 using YourApp.Infrastructure.Persistence.Contexts;
 
 namespace YourApp.Api.Extensions;
@@ -15,7 +18,9 @@ public static class DatabaseSetup
             return;
 
         await using var scope = app.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await db.Database.MigrateAsync();
+        await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.MigrateAsync();
+#if (AuthLocal)
+        await scope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
+#endif
     }
 }

@@ -37,6 +37,20 @@
       "defaultValue": "true",
       "description": "Kèm feature mẫu Products (entity, CQRS, controller, migration và test)."
     },
+    "auth": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "local",
+      "description": "Cách xác thực: local = module đăng nhập riêng (user, mật khẩu, refresh token); none = chỉ kiểm JWT do IdP ngoài cấp (Keycloak, Entra...).",
+      "choices": [
+        { "choice": "local", "description": "Có module đăng nhập: bảng auth.users/user_sessions, /api/v1/auth/*" },
+        { "choice": "none", "description": "Không có module đăng nhập" }
+      ]
+    },
+    "AuthLocal": {
+      "type": "computed",
+      "value": "(auth == \"local\")"
+    },
     "SkipRestore": {
       "type": "parameter",
       "datatype": "bool",
@@ -83,6 +97,19 @@
             "tests/YourApp.UnitTests/Application/**",
             "tests/YourApp.IntegrationTests/ProductsEndpointsTests.cs",
             "tests/YourApp.IntegrationTests/UnitOfWorkTransactionTests.cs"
+          ]
+        },
+        {
+          "condition": "(!AuthLocal)",
+          "exclude": [
+            "src/YourApp.Domain/Auth/**",
+            "src/YourApp.Application/Auth/**",
+            "src/YourApp.Infrastructure/Auth/**",
+            "src/YourApp.Api/Controllers/AuthController.cs",
+            "src/YourApp.Api/Contracts/Auth/**",
+            "src/YourApp.Api/Options/RefreshTokenCookieOptions.cs",
+            "tests/YourApp.UnitTests/Auth/**",
+            "tests/YourApp.IntegrationTests/AuthEndpointsTests.cs"
           ]
         }
       ]

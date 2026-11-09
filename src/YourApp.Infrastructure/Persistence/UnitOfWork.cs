@@ -4,11 +4,12 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using YourApp.Application.Abstractions;
 using YourApp.Domain.Shared;
-using YourApp.Infrastructure.Persistence.Contexts;
 
 namespace YourApp.Infrastructure.Persistence;
 
-internal sealed partial class UnitOfWork(ApplicationDbContext dbContext, ILogger<UnitOfWork> logger) : IUnitOfWork
+/// <summary>Một cài đặt dùng cho mọi DbContext; mỗi module đăng ký interface riêng trỏ tới context của nó.</summary>
+internal sealed partial class UnitOfWork<TContext>(TContext dbContext, ILogger<UnitOfWork<TContext>> logger) : IUnitOfWork
+    where TContext : DbContext
 {
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);

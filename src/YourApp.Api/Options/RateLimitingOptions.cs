@@ -11,4 +11,8 @@ public sealed class RateLimitingOptions
 
     [Range(1, 3600)]
     public int WindowSeconds { get; init; } = 60;
+
+    /// <summary>Số request mỗi cửa sổ, theo IP, cho endpoint nhạy cảm (policy "sensitive": đăng nhập, refresh...).</summary>
+    [Range(1, int.MaxValue)]
+    public int SensitivePermitLimit { get; init; } = 10;
 }

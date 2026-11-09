@@ -1,4 +1,4 @@
-using YourApp.Api.Services;
+using YourApp.Infrastructure.Security;
 
 namespace YourApp.Api.Extensions;
 

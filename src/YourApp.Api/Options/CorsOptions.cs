@@ -6,4 +6,7 @@ public sealed class CorsOptions
 
     /// <summary>Rỗng = không cho gọi cross-origin.</summary>
     public string[] AllowedOrigins { get; init; } = [];
+
+    /// <summary>Cho phép gửi cookie cross-origin (FE khác origin dùng refresh token qua cookie).</summary>
+    public bool AllowCredentials { get; init; }
 }

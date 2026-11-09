@@ -8,12 +8,14 @@ Template Web API cho dự án mới: Clean Architecture, CQRS với MediatR, EF 
 dotnet new install .                       # cài từ thư mục này (chạy lại sau khi sửa template)
 dotnet new ca-api -n Acme.Shop             # tạo solution mới, đổi mọi "YourApp" thành "Acme.Shop"
 dotnet new ca-api -n Acme.Shop --IncludeSample false   # bỏ feature mẫu Products
+dotnet new ca-api -n Acme.Shop --auth none # không có module đăng nhập (dùng IdP ngoài)
 dotnet new uninstall .                     # gỡ template
 ```
 
 | Tuỳ chọn | Mặc định | Ý nghĩa |
 |---|---|---|
 | `--IncludeSample` | `true` | Kèm feature mẫu `Products` (entity, command/query, controller, migration, test) |
+| `--auth` | `local` | `local`: module đăng nhập riêng (xem mục Đăng nhập). `none`: chỉ kiểm JWT, token do Keycloak/Entra/Auth0 cấp |
 | `--SkipRestore` | `false` | Không tự `dotnet restore` sau khi tạo |
 
 Cổng `launchSettings.json` được sinh ngẫu nhiên cho mỗi project để không đụng nhau.
@@ -47,7 +49,42 @@ curl -X POST http://localhost:<port>/dev/token -H "Content-Type: application/jso
      -d '{"subject":"dev-user","roles":["Admin"]}'
 ```
 
-Template chưa có đăng nhập thật. Khi thêm (ASP.NET Identity, Keycloak…), endpoint login dùng `JwtTokenIssuer` hoặc thay hẳn bằng IdP bên ngoài.
+<!--#if (AuthLocal) -->
+Với `--auth local`, Development tự tạo tài khoản `admin@example.com` / `ChangeMe123!` (cấu hình `Auth:SeedAdmin` trong `appsettings.Development.json`) để đăng nhập thật qua `/api/v1/auth/login`.
+
+## Đăng nhập (`--auth local`)
+
+Bảng nằm trong schema `auth`, `AuthDbContext` và migration riêng (`src/YourApp.Infrastructure/Auth`), tách khỏi dữ liệu nghiệp vụ:
+
+| Bảng | Nội dung |
+|---|---|
+| `auth.users` | Email (chữ thường, unique), mật khẩu băm PBKDF2, khoá tạm, `security_stamp` |
+| `auth.user_roles` | Vai trò: `Admin`, `Manager`, `User` (hằng `Roles`) |
+| `auth.user_sessions` | Mỗi dòng một thiết bị đang đăng nhập; chỉ lưu **SHA-256** của refresh token |
+
+| Endpoint | Quyền | Việc |
+|---|---|---|
+| `POST /api/v1/auth/login` | ẩn danh | Trả access token (15') + refresh token (14 ngày) |
+| `POST /api/v1/auth/refresh` | ẩn danh | Đổi refresh token lấy cặp mới; token cũ hết hiệu lực ngay |
+| `POST /api/v1/auth/logout`, `/logout-all` | đăng nhập | Thu hồi phiên hiện tại / mọi phiên |
+| `GET /api/v1/auth/me`, `/sessions` | đăng nhập | Thông tin user; danh sách thiết bị đang đăng nhập |
+| `POST /api/v1/auth/change-password` | đăng nhập | Đổi mật khẩu, thu hồi mọi phiên khác |
+| `POST /api/v1/auth/users` | Admin | Tạo tài khoản |
+| `POST /api/v1/auth/register` | ẩn danh | Tự đăng ký — **tắt mặc định** (`Auth:AllowSelfRegistration`) |
+
+**Cách FE giữ refresh token:**
+
+- **Web (mặc định):** refresh token nằm trong cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` — JavaScript không đọc được, lỗi XSS không lấy cắp được. Body login chỉ có access token: giữ trong **bộ nhớ** (biến JS), không ghi `localStorage`. Khi access token hết hạn: `POST /api/v1/auth/refresh` **không body**, kèm header `X-CSRF: 1` và `credentials: "include"`. Đường dẫn gọi phải viết thường (`/auth`) vì `Path` của cookie phân biệt hoa thường.
+- **Mobile / hệ thống khác:** gửi header `X-Client-Type: mobile` khi login → refresh token trả trong body; refresh bằng body `{ "refreshToken": "..." }`. Muốn mọi client đều dùng body: `Auth:RefreshToken:DefaultTransport = Body`.
+- FE khác origin dùng cookie: `Cors:AllowCredentials = true` và liệt kê `Cors:AllowedOrigins`. FE khác **site** (khác domain gốc) thì `Auth:RefreshToken:SameSite = None`.
+
+**Bảo vệ đi kèm:** khoá 15' sau 5 lần sai mật khẩu; cùng một thông báo lỗi cho sai email và sai mật khẩu (kèm băm giả để thời gian phản hồi như nhau); rate limit riêng 10 request/phút/IP cho login, refresh, register (`RateLimiting:SensitivePermitLimit`); refresh token dùng lại sau khi đã đổi → **thu hồi cả họ phiên** (trừ 10 giây ân hạn cho hai tab refresh cùng lúc); concurrency token `xmin` chặn hai request cùng đổi một phiên.
+
+**Giới hạn đã biết:** access token không kiểm DB ở mỗi request (stateless) nên đăng xuất / đổi mật khẩu chỉ chặn được access token đã phát khi nó hết hạn (tối đa `Auth:AccessTokenMinutes`). Cần chặn tức thì thì thêm kiểm `sid` với danh sách phiên bị thu hồi trong Redis ở `OnTokenValidated` của JwtBearer.
+
+**Production:** đặt `Auth__SeedAdmin__Email` / `Auth__SeedAdmin__Password` cho lần chạy đầu (chỉ tạo khi bảng users trống), đăng nhập rồi đổi mật khẩu ngay, sau đó gỡ biến môi trường.
+
+<!--#endif -->
 
 ## Cấu trúc
 
@@ -132,10 +169,16 @@ Không tự gọi `Database.BeginTransaction` trong code: EF đang bật `Enable
 
 ## Migration
 
+Dữ liệu nghiệp vụ dùng `ApplicationDbContext`; module đăng nhập (`--auth local`) có `AuthDbContext` riêng. Có hơn một context thì mọi lệnh phải ghi `--context`:
+
 ```bash
-dotnet ef migrations add <Ten> -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o Persistence/Migrations
-dotnet ef migrations script --idempotent -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o migrate.sql
-dotnet ef migrations bundle -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o efbundle
+# Dữ liệu nghiệp vụ
+dotnet ef migrations add <Ten> --context ApplicationDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o Persistence/Migrations
+# Module đăng nhập
+dotnet ef migrations add <Ten> --context AuthDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o Auth/Migrations
+
+dotnet ef migrations script --idempotent --context ApplicationDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o migrate.sql
+dotnet ef migrations bundle --context ApplicationDbContext -p src/YourApp.Infrastructure -s src/YourApp.Infrastructure -o efbundle
 ```
 
 - Development: `Database:MigrateOnStartup=true` tự migrate khi chạy.

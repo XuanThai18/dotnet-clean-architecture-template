@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
-using YourApp.Api.Services;
+using YourApp.Infrastructure.Security;
 
 [assembly: AssemblyFixture(typeof(YourApp.IntegrationTests.ApiFactory))]
 
@@ -52,5 +52,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("JwtSettings:Secret", "integration-test-secret-0123456789abcdef");
         builder.UseSetting("Database:MigrateOnStartup", "true");
         builder.UseSetting("RateLimiting:PermitLimit", "100000");
+        builder.UseSetting("RateLimiting:SensitivePermitLimit", "100000");
+#if (AuthLocal)
+        // 0 giây: dùng lại token đã đổi là bị coi như đánh cắp ngay → kiểm được luồng thu hồi cả họ phiên.
+        builder.UseSetting("Auth:RefreshReuseGraceSeconds", "0");
+#endif
     }
+
+    /// <summary>Client HTTPS có giữ cookie: cookie refresh token gắn cờ Secure nên chỉ gửi qua https.</summary>
+    public HttpClient CreateCookieClient() =>
+        CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = true });
 }
